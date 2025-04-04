@@ -49,9 +49,14 @@ def main():
     file_data = []
     correct_chars = []
 
-    with open(in_file,'r') as f:
-        for line in f: # read file into memory to avoid counting disk I/O time
-            file_data.append(line.rstrip('\r\n'))
+    try:
+        with open(in_file,'r') as f:
+            for line in f: # read file into memory to avoid counting disk I/O time
+                file_data.append(line.rstrip('\r\n'))
+    except Exception as err:
+        print(err)
+        parser.print_help()
+        return 1
 
     start = tmr.perf_counter_ns() # start nanosecond timer
     first = True
@@ -183,24 +188,27 @@ def main():
         print(PState.ENDC)
     duration = tmr.perf_counter_ns() - start # end nanosecond timer
 
-    good = sum(correct_chars)
-    results = calculate_results(duration, all_chars_count, typed_keys_count, good, word_count) # calculate results
+    good_chars_count = sum(correct_chars)
+    results = calculate_results(duration, all_chars_count, typed_keys_count, good_chars_count, word_count)
 
     # display statistics
     print(f'duration: {duration/1_000_000_000:.1f} seconds')
     print(f'total characters: {all_chars_count}')
-    print(f'correct characters: {good}')
+    print(f'correct characters: {good_chars_count}')
     print(f'accuracy: {results[0]:.1%}')
     print(f'keys per second: {results[1]:.2f}')
     print(f'words per minute: {results[2]:.2f}')
 
     # save results for historical comparison
-    with open(out_file, 'a') as fo:
-        newline = '\n'
-        fo.write(str(dt.now())+newline)
-        fo.write(in_file+newline)
-        fo.write(f'{duration}, {all_chars_count}, {good}, {word_count}')
-        fo.write(newline+newline)
+    try:
+        with open(out_file, 'a') as fo:
+            newline = '\n'
+            fo.write(str(dt.now())+newline)
+            fo.write(in_file+newline)
+            fo.write(f'dur:{duration}, len:{all_chars_count}, good:{good_chars_count}, words:{word_count}')
+            fo.write(newline+newline)
+    except Exception as err:
+        print(err)
 
     # end of program
 
