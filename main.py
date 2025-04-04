@@ -1,4 +1,4 @@
-import time as tmr, argparse as ap, readchar as rc, platform as pf
+import argparse as ap, platform as pf, readchar as rc, time as tmr
 from datetime import datetime as dt
 from enum import Enum
 
@@ -54,6 +54,7 @@ def main():
             for line in f: # read file into memory to avoid counting disk I/O time
                 file_data.append(line.rstrip('\r\n'))
     except Exception as err:
+        print('Could not find, open, or read test file')
         print(err)
         parser.print_help()
         return 1
@@ -208,9 +209,10 @@ def main():
             fo.write(f'dur:{duration}, len:{all_chars_count}, good:{good_chars_count}, words:{word_count}')
             fo.write(newline+newline)
     except Exception as err:
+        print('Could not save results')
         print(err)
 
-    # end of program
+    # end of main()
 
 
 def readkbd():
