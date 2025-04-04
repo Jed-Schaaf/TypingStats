@@ -1,6 +1,7 @@
 # TypingStats
 
 This is a simple command-line program developed in 2025 by Jed Schaaf as a capstone project for NCLab's Python training course.
+It uses the readchar library from PyPI: https://pypi.org/project/readchar/
 
 The program compares keyboard-typed user input against a user-supplied test file and calculates several typing statistics, including typing accuracy as a percentage of correctly typed keys and speed as measured via keys-per-second (kps) and words-per-minute (wpm). The test file can be any input that Python can open as a file and read as text. User input comes from stdin (usually the keyboard).
 
