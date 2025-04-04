@@ -1,4 +1,4 @@
-import time as t, argparse as ap, readchar as rc, platform as pf
+import time as tmr, argparse as ap, readchar as rc, platform as pf
 from datetime import datetime as dt
 from enum import Enum
 
@@ -28,7 +28,10 @@ def main():
         char_backspace = '\x08'
         word_backspace = '\x7f'
 
-    parser = ap.ArgumentParser("TypingStats")
+    parser = ap.ArgumentParser(prog="TypingStats",
+                               description="""Check your typing skills
+                               against any text of your choice!""",
+                               epilog='Developed by Jed Schaaf (2025)')
     parser.add_argument("--input", "-if",
                         help="Source file of text to use for typing test",
                         type=str, default="./test.txt")
@@ -37,128 +40,127 @@ def main():
                         type=str, default="./results.txt")
     args = parser.parse_args()
 
-    # get in/out files from user input (exec param or open-file dialog?)
-    ifile = args.input
-    ofile = args.output
+    # get in/out files from cmd-line argument(s)
+    in_file = args.input
+    out_file = args.output
 
     # set up statistics counters
-    all_chars_count = typed_keys = word_count = 0
-    data = []
-    correct = []
+    all_chars_count = typed_keys_count = word_count = 0
+    file_data = []
+    correct_chars = []
 
-    with open(ifile,'r') as f:
+    with open(in_file,'r') as f:
         for line in f: # read file into memory to avoid counting disk I/O time
-            data.append(line.rstrip('\r\n'))
+            file_data.append(line.rstrip('\r\n'))
 
-    start = t.perf_counter_ns() # start nanosecond timer
+    start = tmr.perf_counter_ns() # start nanosecond timer
     first = True
     abort = False
-    for line in data:
+    for line in file_data:
         content_state:CState = CState.INITIAL
-
         print(line)
-        text = []
-        x, ctrl = readkbd() # wait for next keyboard input
-        typed_keys += 1
+        user_text = []
+        next_ch, ctrl = readkbd() # wait for next keyboard input
+        typed_keys_count += 1
 
         # reset start time in case user doesn't start typing immediately
         if first:
             first = False
-            start = t.perf_counter_ns()
+            start = tmr.perf_counter_ns()
 
-        while x != rc.key.ENTER:
+        while next_ch != rc.key.ENTER:
 
-            if x == char_backspace: # backtrack state
-                if text:
-                    x = text.pop()
+            if next_ch == char_backspace: # backtrack state
+                if user_text:
+                    next_ch = user_text.pop()
                     all_chars_count -= 1
-                    correct.pop()
+                    correct_chars.pop()
                 else:
-                    x = ''
-                if x != '':
+                    next_ch = ''
+                if next_ch != '':
                     if content_state == CState.ALPHANUM:
                         print(PState.ENDC+'\b \b', end='')
-                        if str.isalnum(x):
+                        if str.isalnum(next_ch):
                             pass
-                        elif str.isspace(x) or not str.isprintable(x):
+                        elif str.isspace(next_ch) or not str.isprintable(next_ch):
                             content_state = CState.BLANKPUNCT
                             word_count -= 1
                     elif content_state == CState.BLANKPUNCT:
                         print(PState.ENDC+'\b \b', end='')
-                        if str.isalnum(x):
+                        if str.isalnum(next_ch):
                             content_state = CState.ALPHANUM
                     elif content_state == CState.INITIAL:
                         pass
-                if not text:
+                if not user_text:
                     content_state = CState.INITIAL
 
-            elif x == word_backspace:
+            elif next_ch == word_backspace:
                 if content_state == CState.ALPHANUM:
                     counter = 0
-                    while text:
-                        x = text[-1]
-                        if str.isalnum(x):
-                            text.pop()
+                    while user_text:
+                        next_ch = user_text[-1]
+                        if str.isalnum(next_ch):
+                            user_text.pop()
                             all_chars_count -= 1
-                            correct.pop()
+                            correct_chars.pop()
                             counter += 1
                         else:
                             content_state = CState.BLANKPUNCT
                             break
                     print(PState.ENDC+'\b'*counter+' '*counter+'\b'*counter, end='')
-                    if not text:
+                    if not user_text:
                         content_state = CState.INITIAL
                     word_count -= 1
                 elif content_state == CState.BLANKPUNCT:
                     counter = 0
-                    while text:
-                        x = text[-1]
-                        if str.isalnum(x):
+                    while user_text:
+                        next_ch = user_text[-1]
+                        if str.isalnum(next_ch):
                             content_state = CState.ALPHANUM
                             break
                         else:
-                            text.pop()
+                            user_text.pop()
                             all_chars_count -= 1
-                            correct.pop()
+                            correct_chars.pop()
                             counter += 1
                     print(PState.ENDC+'\b'*counter+' '*counter+'\b'*counter, end='')
-                    if not text:
+                    if not user_text:
                         content_state = CState.INITIAL
                 elif content_state == CState.INITIAL:
                     pass
 
-            elif str.isprintable(x):
-                text.append(x)
-                y = line[len(text) - 1] if len(text) <= len(line) else ''
+            elif str.isprintable(next_ch):
+                user_text.append(next_ch)
+                y = line[len(user_text) - 1] if len(user_text) <= len(line) else ''
 
                 # update word count
-                if str.isalnum(x):
+                if str.isalnum(next_ch):
                     if content_state != CState.ALPHANUM: # new word
                         word_count += 1
                     content_state = CState.ALPHANUM
-                elif str.isspace(x):
+                elif str.isspace(next_ch):
                     if content_state != CState.BLANKPUNCT: # new blank or punctuation
                         content_state = CState.BLANKPUNCT
 
                 # update character counts
-                if x == '' and y != '':
+                if next_ch == '' and y != '':
                     print(PState.WARN+y, end='')
                     all_chars_count += 1
-                    correct.append(False)
-                elif x != '' and y == '':
-                    print(PState.WARN+x, end='')
+                    correct_chars.append(False)
+                elif next_ch != '' and y == '':
+                    print(PState.WARN+next_ch, end='')
                     all_chars_count += 1
-                    correct.append(False)
-                elif x != y: # show discrepancies
-                    print(PState.FAIL+x, end='')
+                    correct_chars.append(False)
+                elif next_ch != y: # show discrepancies
+                    print(PState.FAIL+next_ch, end='')
                     all_chars_count += 1
-                    correct.append(False)
-                elif x == y:
-                    print(PState.GOOD+x, end='')
+                    correct_chars.append(False)
+                elif next_ch == y:
+                    print(PState.GOOD+next_ch, end='')
                     all_chars_count += 1
-                    correct.append(True)
+                    correct_chars.append(True)
 
-            elif x == rc.key.CTRL_C:
+            elif next_ch == rc.key.CTRL_C:
                 abort = True # interrupt test and get current results
                 break
 
@@ -166,23 +168,23 @@ def main():
                 pass # ignore invalid input
                 #print(repr(x)) #show me what was typed
 
-            x, ctrl = readkbd()
-            typed_keys += 1
+            next_ch, ctrl = readkbd()
+            typed_keys_count += 1
 
         if abort:
             print(PState.ENDC)
             break
 
-        if len(text) < len(line):
-            for m in range(len(text), len(line)):
+        if len(user_text) < len(line):
+            for m in range(len(user_text), len(line)):
                 print(PState.WARN+line[m], end='')
                 all_chars_count += 1
 
         print(PState.ENDC)
-    duration = t.perf_counter_ns() - start # end nanosecond timer
+    duration = tmr.perf_counter_ns() - start # end nanosecond timer
 
-    good = sum(correct)
-    results = calculate_results(duration, all_chars_count, typed_keys, good, word_count) # calculate results
+    good = sum(correct_chars)
+    results = calculate_results(duration, all_chars_count, typed_keys_count, good, word_count) # calculate results
 
     # display statistics
     print(f'duration: {duration/1_000_000_000:.1f} seconds')
@@ -193,15 +195,14 @@ def main():
     print(f'words per minute: {results[2]:.2f}')
 
     # save results for historical comparison
-    with open(ofile, 'a') as fo:
+    with open(out_file, 'a') as fo:
         newline = '\n'
         fo.write(str(dt.now())+newline)
-        fo.write(ifile+newline)
+        fo.write(in_file+newline)
         fo.write(f'{duration}, {all_chars_count}, {good}, {word_count}')
         fo.write(newline+newline)
 
-    # end program
-    # TODO: ask for repeat?
+    # end of program
 
 
 def readkbd():
