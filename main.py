@@ -1,4 +1,4 @@
-import argparse as ap, platform as pf, readchar as rc, time as tmr
+import argparse as ap, readchar as rc, time as tmr
 from datetime import datetime as dt
 from enum import Enum
 
@@ -18,19 +18,11 @@ class CState(Enum):
     BLANKPUNCT = 2
 
 
-def main():
-    """TypingStats main program"""
-
-    if pf.system() == 'Linux':
-        char_backspace = '\x7f'
-        word_backspace = '\x08'
-    else:
-        char_backspace = '\x08'
-        word_backspace = '\x7f'
-
+def setup_parser():
+    """configure help and command-line parameters"""
     parser = ap.ArgumentParser(prog="TypingStats",
                                description="""Check your typing skills
-                               against any text of your choice!""",
+                                   against any text of your choice!""",
                                epilog='Developed by Jed Schaaf (2025)')
     parser.add_argument("--input", "-if",
                         help="Source file of text to use for typing test",
@@ -38,9 +30,21 @@ def main():
     parser.add_argument("--output", "-of",
                         help="Statistics file to append typing results",
                         type=str, default="./results.txt")
-    args = parser.parse_args()
+    return parser
 
+
+def main():
+    """TypingStats main program"""
+
+    # *nix systems and Windows swap backspace and ctrl+backspace codes
+    if rc.key.BACKSPACE == '\x08':
+        word_backspace = '\x7f'
+    else:
+        word_backspace = '\x08'
+
+    parser = setup_parser()
     # get in/out files from cmd-line argument(s)
+    args = parser.parse_args()
     in_file = args.input
     out_file = args.output
 
@@ -76,7 +80,8 @@ def main():
 
         while next_ch != rc.key.ENTER:
 
-            if next_ch == char_backspace: # backtrack state
+            # backtrack state for one character
+            if next_ch == rc.key.BACKSPACE:
                 if user_text:
                     next_ch = user_text.pop()
                     all_chars_count -= 1
@@ -100,6 +105,7 @@ def main():
                 if not user_text:
                     content_state = CState.INITIAL
 
+            # backtrack state for contiguous similar characters
             elif next_ch == word_backspace:
                 if content_state == CState.ALPHANUM:
                     counter = 0
@@ -172,7 +178,6 @@ def main():
 
             else:
                 pass # ignore invalid input
-                #print(repr(x)) #show me what was typed
 
             next_ch, ctrl = readkbd()
             typed_keys_count += 1
@@ -193,24 +198,11 @@ def main():
     results = calculate_results(duration, all_chars_count, typed_keys_count, good_chars_count, word_count)
 
     # display statistics
-    print(f'duration: {duration/1_000_000_000:.1f} seconds')
-    print(f'total characters: {all_chars_count}')
-    print(f'correct characters: {good_chars_count}')
-    print(f'accuracy: {results[0]:.1%}')
-    print(f'keys per second: {results[1]:.2f}')
-    print(f'words per minute: {results[2]:.2f}')
+    display_results(duration, all_chars_count, good_chars_count, results)
 
     # save results for historical comparison
-    try:
-        with open(out_file, 'a') as fo:
-            newline = '\n'
-            fo.write(str(dt.now())+newline)
-            fo.write(in_file+newline)
-            fo.write(f'dur:{duration}, len:{all_chars_count}, good:{good_chars_count}, words:{word_count}')
-            fo.write(newline+newline)
-    except Exception as err:
-        print('Could not save results')
-        print(err)
+    save_results(out_file, in_file, duration,
+                 all_chars_count, good_chars_count, word_count)
 
     # end of main()
 
@@ -231,6 +223,32 @@ def calculate_results(duration, all_chars, typed_keys, good_chars, words):
     kps = typed_keys / (duration / 1_000_000_000)
     wpm = words / (duration / 60_000_000_000)
     return accuracy, kps, wpm
+
+
+def display_results(duration, all_chars_count, good_chars_count, results):
+    """show results on stdout"""
+    print(f'duration: {duration / 1_000_000_000:.1f} seconds')
+    print(f'total characters: {all_chars_count}')
+    print(f'correct characters: {good_chars_count}')
+    print(f'accuracy: {results[0]:.1%}')
+    print(f'keys per second: {results[1]:.2f}')
+    print(f'words per minute: {results[2]:.2f}')
+
+
+def save_results(out_file, in_file, duration, all_chars_count,
+                 good_chars_count, word_count):
+    """add results to selected file"""
+    try:
+        with open(out_file, 'a') as fo:
+            newline = rc.key.ENTER
+            fo.write(str(dt.now())+newline)
+            fo.write(in_file+newline)
+            fo.write(f'dur:{duration}, len:{all_chars_count}, '+
+                     f'good:{good_chars_count}, words:{word_count}')
+            fo.write(newline+newline)
+    except Exception as err:
+        print('Could not save results')
+        print(err)
 
 
 if __name__ == '__main__':

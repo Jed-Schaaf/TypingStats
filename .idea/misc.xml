@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
-    <option name="sdkName" value="Python 3.13 (capstone)" />
+    <option name="sdkName" value="Python 3.13 (TypingStats)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (.virtualenvs)" project-jdk-type="Python SDK" />
 </project>
