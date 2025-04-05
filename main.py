@@ -1,8 +1,11 @@
-import argparse as ap, readchar as rc, time as tmr
+import argparse as ap
+import time as tmr
 from datetime import datetime as dt
 from enum import Enum
+import readchar as rc
 
 class PState(Enum):
+    """"""
     GOOD = '\033[92m'
     WARN = '\033[93m'
     FAIL = '\033[91m'
@@ -90,14 +93,14 @@ def main():
                     next_ch = ''
                 if next_ch != '':
                     if content_state == CState.ALPHANUM:
-                        print(PState.ENDC+'\b \b', end='')
+                        print(PState.ENDC + '\b \b', end='')
                         if str.isalnum(next_ch):
                             pass
                         elif str.isspace(next_ch) or not str.isprintable(next_ch):
                             content_state = CState.BLANKPUNCT
                             word_count -= 1
                     elif content_state == CState.BLANKPUNCT:
-                        print(PState.ENDC+'\b \b', end='')
+                        print(PState.ENDC + '\b \b', end='')
                         if str.isalnum(next_ch):
                             content_state = CState.ALPHANUM
                     elif content_state == CState.INITIAL:
@@ -119,7 +122,7 @@ def main():
                         else:
                             content_state = CState.BLANKPUNCT
                             break
-                    print(PState.ENDC+'\b'*counter+' '*counter+'\b'*counter, end='')
+                    print(PState.ENDC + '\b'*counter + ' '*counter + '\b'*counter, end='')
                     if not user_text:
                         content_state = CState.INITIAL
                     word_count -= 1
@@ -135,7 +138,7 @@ def main():
                             all_chars_count -= 1
                             correct_chars.pop()
                             counter += 1
-                    print(PState.ENDC+'\b'*counter+' '*counter+'\b'*counter, end='')
+                    print(PState.ENDC + '\b'*counter + ' '*counter + '\b'*counter, end='')
                     if not user_text:
                         content_state = CState.INITIAL
                 elif content_state == CState.INITIAL:
@@ -172,12 +175,14 @@ def main():
                     all_chars_count += 1
                     correct_chars.append(True)
 
+            # interrupt test and get current results
             elif next_ch == rc.key.CTRL_C:
-                abort = True # interrupt test and get current results
+                abort = True
                 break
 
+            # ignore invalid input
             else:
-                pass # ignore invalid input
+                pass
 
             next_ch, ctrl = readkbd()
             typed_keys_count += 1
@@ -204,7 +209,7 @@ def main():
     save_results(out_file, in_file, duration,
                  all_chars_count, good_chars_count, word_count)
 
-    # end of main()
+    return 0 # end of main()
 
 
 def readkbd():
