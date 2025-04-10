@@ -21,21 +21,6 @@ class CState(Enum):
     BLANKPUNCT = 2
 
 
-def setup_parser():
-    """configure help and command-line parameters"""
-    parser = ap.ArgumentParser(prog="TypingStats",
-                               description="""Check your typing skills
-                                   against any text of your choice!""",
-                               epilog='Developed by Jed Schaaf (2025)')
-    parser.add_argument("--input", "-if",
-                        help="Source file of text to use for typing test",
-                        type=str, default="./test.txt")
-    parser.add_argument("--output", "-of",
-                        help="Statistics file to append typing results",
-                        type=str, default="./results.txt")
-    return parser
-
-
 def main():
     """TypingStats main program"""
 
@@ -52,9 +37,22 @@ def main():
     out_file = args.output
 
     # set up statistics counters
-    all_chars_count = typed_keys_count = word_count = 0
+    all_chars_count = 0
+    typed_keys_count = 0
+    word_count = 0
     file_data = []
     correct_chars = []
+
+    def remove_last_char():
+        """internal function to remove (and return) the last typed character"""
+        nonlocal all_chars_count
+        all_chars_count -= 1
+        correct_chars.pop()
+        return user_text.pop()
+
+    def erase_char(n: int = 1):
+        """internal function to clear the last n typed characters from the screen"""
+        print(PState.ENDC + '\b'*n + ' '*n + '\b'*n, end='')
 
     try:
         with open(in_file,'r') as f:
@@ -86,21 +84,17 @@ def main():
             # backtrack state for one character
             if next_ch == rc.key.BACKSPACE:
                 if user_text:
-                    next_ch = user_text.pop()
-                    all_chars_count -= 1
-                    correct_chars.pop()
+                    next_ch = remove_last_char()
                 else:
                     next_ch = ''
                 if next_ch != '':
                     if content_state == CState.ALPHANUM:
-                        print(PState.ENDC + '\b \b', end='')
-                        if str.isalnum(next_ch):
-                            pass
-                        elif str.isspace(next_ch) or not str.isprintable(next_ch):
+                        erase_char()
+                        if not str.isalnum(next_ch):
                             content_state = CState.BLANKPUNCT
                             word_count -= 1
                     elif content_state == CState.BLANKPUNCT:
-                        print(PState.ENDC + '\b \b', end='')
+                        erase_char()
                         if str.isalnum(next_ch):
                             content_state = CState.ALPHANUM
                     elif content_state == CState.INITIAL:
@@ -115,14 +109,12 @@ def main():
                     while user_text:
                         next_ch = user_text[-1]
                         if str.isalnum(next_ch):
-                            user_text.pop()
-                            all_chars_count -= 1
-                            correct_chars.pop()
+                            remove_last_char()
                             counter += 1
                         else:
                             content_state = CState.BLANKPUNCT
                             break
-                    print(PState.ENDC + '\b'*counter + ' '*counter + '\b'*counter, end='')
+                    erase_char(counter)
                     if not user_text:
                         content_state = CState.INITIAL
                     word_count -= 1
@@ -134,11 +126,9 @@ def main():
                             content_state = CState.ALPHANUM
                             break
                         else:
-                            user_text.pop()
-                            all_chars_count -= 1
-                            correct_chars.pop()
+                            remove_last_char()
                             counter += 1
-                    print(PState.ENDC + '\b'*counter + ' '*counter + '\b'*counter, end='')
+                    erase_char(counter)
                     if not user_text:
                         content_state = CState.INITIAL
                 elif content_state == CState.INITIAL:
@@ -146,7 +136,7 @@ def main():
 
             elif str.isprintable(next_ch):
                 user_text.append(next_ch)
-                y = line[len(user_text) - 1] if len(user_text) <= len(line) else ''
+                test_base = line[len(user_text) - 1] if len(user_text) <= len(line) else ''
 
                 # update word count
                 if str.isalnum(next_ch):
@@ -158,19 +148,19 @@ def main():
                         content_state = CState.BLANKPUNCT
 
                 # update character counts
-                if next_ch == '' and y != '':
-                    print(PState.WARN+y, end='')
+                if next_ch == '' and test_base != '':
+                    print(PState.WARN+test_base, end='')
                     all_chars_count += 1
                     correct_chars.append(False)
-                elif next_ch != '' and y == '':
+                elif next_ch != '' and test_base == '':
                     print(PState.WARN+next_ch, end='')
                     all_chars_count += 1
                     correct_chars.append(False)
-                elif next_ch != y: # show discrepancies
+                elif next_ch != test_base: # show discrepancies
                     print(PState.FAIL+next_ch, end='')
                     all_chars_count += 1
                     correct_chars.append(False)
-                elif next_ch == y:
+                elif next_ch == test_base:
                     print(PState.GOOD+next_ch, end='')
                     all_chars_count += 1
                     correct_chars.append(True)
@@ -210,6 +200,25 @@ def main():
                  all_chars_count, good_chars_count, word_count)
 
     return 0 # end of main()
+
+
+def setup_parser():
+    """configure help and command-line parameters"""
+    parser = ap.ArgumentParser(prog="TypingStats",
+                               description="""Check your typing skills
+                                   against any text of your choice!""",
+                               epilog='Developed by Jed Schaaf (2025)')
+    parser.add_argument("--input", "-if",
+                        help="Source file of text to use for typing test",
+                        type=str, default="./test.txt")
+    # test.txt = The quick brown fox jumps over the lazy dog.
+    # test0.txt = Lorem Ipsum
+    # test1.txt = Psalm 23
+    # test2.txt = Ozymandias
+    parser.add_argument("--output", "-of",
+                        help="Statistics file to append typing results",
+                        type=str, default="./results.txt")
+    return parser
 
 
 def readkbd():
