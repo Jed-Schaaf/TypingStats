@@ -1,11 +1,20 @@
+"""
+Name: TypingStats
+Description: A commandline/terminal application to measure
+the user's typing speed and accuracy.
+Author: Jed Schaaf
+Date: 2025
+"""
 import argparse as ap
+import locale as loc
 import time as tmr
 from datetime import datetime as dt
 from enum import Enum
 import readchar as rc
 
+
 class PState(Enum):
-    """"""
+    """Print State for character display"""
     GOOD = '\033[92m'
     WARN = '\033[93m'
     FAIL = '\033[91m'
@@ -15,7 +24,9 @@ class PState(Enum):
     def __str__(self):
         return str(self.value)
 
+
 class CState(Enum):
+    """Character State to facilitate counting words"""
     INITIAL = 0
     ALPHANUM = 1
     BLANKPUNCT = 2
@@ -31,34 +42,69 @@ def main():
         word_backspace = '\x08'
 
     parser = setup_parser()
-    # get in/out files from cmd-line argument(s)
     args = parser.parse_args()
-    in_file = args.input
-    out_file = args.output
 
     # set up statistics counters
-    all_chars_count = 0
-    typed_keys_count = 0
-    word_count = 0
+    stat_counters = {"all_chars": 0, "typed_keys": 0, "words": 0}
     file_data = []
     correct_chars = []
 
+    local_encoding = loc.getpreferredencoding()
+
     def remove_last_char():
         """internal function to remove (and return) the last typed character"""
-        nonlocal all_chars_count
-        all_chars_count -= 1
-        correct_chars.pop()
-        return user_text.pop()
+        stat_counters["all_chars"] -= 1
+        if correct_chars:
+            correct_chars.pop()
+        if user_text:
+            retval = user_text.pop()
+        else:
+            retval = ''
+        return retval
 
     def erase_char(n: int = 1):
         """internal function to clear the last n typed characters from the screen"""
         print(PState.ENDC + '\b'*n + ' '*n + '\b'*n, end='')
 
+    def remove_char(next_char):
+        """internal function to remove a character from current typing line"""
+        nonlocal content_state
+        if content_state == CState.INITIAL:
+            return
+        erase_char()
+        if content_state == CState.ALPHANUM and not str.isalnum(next_char):
+            content_state = CState.BLANKPUNCT
+            stat_counters["words"] -= 1
+        elif content_state == CState.BLANKPUNCT and str.isalnum(next_char):
+            content_state = CState.ALPHANUM
+
+    def remove_char_set(next_char):
+        """internal function to remove a set of similar characters from current typing line"""
+        nonlocal content_state
+        if content_state == CState.INITIAL:
+            return
+        char_set_counter = 0
+        while user_text:
+            next_char = user_text[-1]
+            if content_state == CState.ALPHANUM and not str.isalnum(next_char):
+                content_state = CState.BLANKPUNCT
+                stat_counters["words"] -= 1
+                break
+            if content_state == CState.BLANKPUNCT and str.isalnum(next_char):
+                content_state = CState.ALPHANUM
+                break
+            remove_last_char()
+            char_set_counter += 1
+        erase_char(char_set_counter)
+        if not user_text:
+            content_state = CState.INITIAL
+
+
     try:
-        with open(in_file,'r') as f:
+        with open(args.input, 'rt', encoding=local_encoding) as f:
             for line in f: # read file into memory to avoid counting disk I/O time
                 file_data.append(line.rstrip('\r\n'))
-    except Exception as err:
+    except IOError as err:
         print('Could not find, open, or read test file')
         print(err)
         parser.print_help()
@@ -72,7 +118,7 @@ def main():
         print(line)
         user_text = []
         next_ch, ctrl = readkbd() # wait for next keyboard input
-        typed_keys_count += 1
+        stat_counters["typed_keys"] += 1
 
         # reset start time in case user doesn't start typing immediately
         if first:
@@ -88,85 +134,46 @@ def main():
                 else:
                     next_ch = ''
                 if next_ch != '':
-                    if content_state == CState.ALPHANUM:
-                        erase_char()
-                        if not str.isalnum(next_ch):
-                            content_state = CState.BLANKPUNCT
-                            word_count -= 1
-                    elif content_state == CState.BLANKPUNCT:
-                        erase_char()
-                        if str.isalnum(next_ch):
-                            content_state = CState.ALPHANUM
-                    elif content_state == CState.INITIAL:
-                        pass
+                    remove_char(next_ch)
                 if not user_text:
                     content_state = CState.INITIAL
 
             # backtrack state for contiguous similar characters
             elif next_ch == word_backspace:
-                if content_state == CState.ALPHANUM:
-                    counter = 0
-                    while user_text:
-                        next_ch = user_text[-1]
-                        if str.isalnum(next_ch):
-                            remove_last_char()
-                            counter += 1
-                        else:
-                            content_state = CState.BLANKPUNCT
-                            break
-                    erase_char(counter)
-                    if not user_text:
-                        content_state = CState.INITIAL
-                    word_count -= 1
-                elif content_state == CState.BLANKPUNCT:
-                    counter = 0
-                    while user_text:
-                        next_ch = user_text[-1]
-                        if str.isalnum(next_ch):
-                            content_state = CState.ALPHANUM
-                            break
-                        else:
-                            remove_last_char()
-                            counter += 1
-                    erase_char(counter)
-                    if not user_text:
-                        content_state = CState.INITIAL
-                elif content_state == CState.INITIAL:
-                    pass
+                remove_char_set(next_ch)
 
-            elif str.isprintable(next_ch):
+            # display next typed character
+            elif str.isprintable(next_ch) and not ctrl:
                 user_text.append(next_ch)
                 test_base = line[len(user_text) - 1] if len(user_text) <= len(line) else ''
 
                 # update word count
                 if str.isalnum(next_ch):
                     if content_state != CState.ALPHANUM: # new word
-                        word_count += 1
+                        stat_counters["words"] += 1
                     content_state = CState.ALPHANUM
                 elif str.isspace(next_ch):
                     if content_state != CState.BLANKPUNCT: # new blank or punctuation
                         content_state = CState.BLANKPUNCT
 
                 # update character counts
-                if next_ch == '' and test_base != '':
-                    print(PState.WARN+test_base, end='')
-                    all_chars_count += 1
+                stat_counters["all_chars"] += 1
+                if next_ch == '' and test_base != '': # missed characters in active typing
+                    print(PState.WARN+test_base, end='') # not sure how this could happen
                     correct_chars.append(False)
-                elif next_ch != '' and test_base == '':
+                elif next_ch != '' and test_base == '': # show extra characters
                     print(PState.WARN+next_ch, end='')
-                    all_chars_count += 1
                     correct_chars.append(False)
                 elif next_ch != test_base: # show discrepancies
                     print(PState.FAIL+next_ch, end='')
-                    all_chars_count += 1
                     correct_chars.append(False)
-                elif next_ch == test_base:
+                elif next_ch == test_base: # show correct characters
                     print(PState.GOOD+next_ch, end='')
-                    all_chars_count += 1
                     correct_chars.append(True)
 
             # interrupt test and get current results
-            elif next_ch == rc.key.CTRL_C:
+            elif next_ch in (rc.key.ESC, rc.key.CTRL_C,
+                             rc.key.CTRL_Q, rc.key.CTRL_Z):
                 abort = True
                 break
 
@@ -175,29 +182,30 @@ def main():
                 pass
 
             next_ch, ctrl = readkbd()
-            typed_keys_count += 1
+            stat_counters["typed_keys"] += 1
 
         if abort:
             print(PState.ENDC)
             break
 
+        # show missed characters
         if len(user_text) < len(line):
             for m in range(len(user_text), len(line)):
                 print(PState.WARN+line[m], end='')
-                all_chars_count += 1
+                stat_counters["all_chars"] += 1
 
         print(PState.ENDC)
     duration = tmr.perf_counter_ns() - start # end nanosecond timer
 
     good_chars_count = sum(correct_chars)
-    results = calculate_results(duration, all_chars_count, typed_keys_count, good_chars_count, word_count)
+    results = calculate_results(duration, stat_counters, good_chars_count)
 
     # display statistics
-    display_results(duration, all_chars_count, good_chars_count, results)
+    display_results(duration, stat_counters["all_chars"], good_chars_count, results)
 
     # save results for historical comparison
-    save_results(out_file, in_file, duration,
-                 all_chars_count, good_chars_count, word_count)
+    save_results(args.output, args.input, duration,
+                 stat_counters, good_chars_count)
 
     return 0 # end of main()
 
@@ -225,17 +233,17 @@ def readkbd():
     """read the next character or control character from the keyboard"""
     retval = rc.readchar()
     control = False
-    if retval == '\000' or retval == '\xe0':
+    if retval in ('\000', '\xe0'):
         control = True
         retval = rc.readchar()
     return retval, control
 
 
-def calculate_results(duration, all_chars, typed_keys, good_chars, words):
+def calculate_results(duration, stats, good_chars):
     """determine keys-per-second, words-per-minute, accuracy, and other results"""
-    accuracy = float(good_chars) / float(all_chars)
-    kps = typed_keys / (duration / 1_000_000_000)
-    wpm = words / (duration / 60_000_000_000)
+    accuracy = float(good_chars) / float(stats["all_chars"])
+    kps = stats["typed_keys"] / (duration / 1_000_000_000)
+    wpm = stats["words"] / (duration / 60_000_000_000)
     return accuracy, kps, wpm
 
 
@@ -249,22 +257,21 @@ def display_results(duration, all_chars_count, good_chars_count, results):
     print(f'words per minute: {results[2]:.2f}')
 
 
-def save_results(out_file, in_file, duration, all_chars_count,
-                 good_chars_count, word_count):
+def save_results(out_file, in_file, duration, stats, good_chars_count):
     """add results to selected file"""
     try:
-        with open(out_file, 'a') as fo:
+        local_encoding = loc.getpreferredencoding()
+        with open(out_file, 'at', encoding=local_encoding) as fo:
             newline = rc.key.ENTER
             fo.write(str(dt.now())+newline)
             fo.write(in_file+newline)
-            fo.write(f'dur:{duration}, len:{all_chars_count}, '+
-                     f'good:{good_chars_count}, words:{word_count}')
+            fo.write(f'dur:{duration}, len:{stats["all_chars"]}, '+
+                     f'good:{good_chars_count}, words:{stats["words"]}')
             fo.write(newline+newline)
-    except Exception as err:
+    except IOError as err:
         print('Could not save results')
         print(err)
 
 
 if __name__ == '__main__':
     main()
-
