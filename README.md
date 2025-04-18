@@ -22,7 +22,7 @@ If the user does not wish to finish the entire test file, any of <kbd>Ctrl</kbd>
 
 ## Calling the program from the command line
 
-If the program may be called with two optional parameters:
+The program may be called with two optional parameters:
 
 - `--input=[input\file\path]` or `-if=[input\file\path]` will automatically start a test using the specified file.
 
