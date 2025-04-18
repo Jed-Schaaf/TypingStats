@@ -1,6 +1,6 @@
 # TypingStats
 
-![main menu](img_1.png)
+![main menu](images/img_1.png)
 
 This is a simple command-line program developed in 2025 by Jed Schaaf as a capstone project for NCLab's Python training course.
 
@@ -10,7 +10,7 @@ The program compares keyboard-typed user input against a user-supplied or user-s
 
 The text from the test file will be displayed line-by-line, with user input interspersed after each line. Correct, incorrect, extra, and missed characters are displayed as the user types them in.
 
-![typing example](img_2.png)
+![typing example](images/img_2.png)
 
 If the user makes a mistake, the current line can be corrected using backspace to delete the last character or ctrl+backspace to delete the last set of alphanumeric characters or the last set of whitespace and punctuation. The corrected text will count in favor of accuracy, but will also affect the kps and wpm measurements.
 
