@@ -19,7 +19,7 @@ class PState(Enum):
     GOOD = '\033[92m'
     WARN = '\033[93m'
     FAIL = '\033[91m'
-    DFLT = '\033[0m'
+    DEFAULT = '\033[0m'
     def __add__(self, other):
         return str(self.value)+str(other)
     def __str__(self):
@@ -30,74 +30,76 @@ class CState(Enum):
     """Character State to facilitate counting words"""
     INITIAL = 0
     ALPHANUM = 1
-    BLANKPUNCT = 2
+    BLANK_OR_PUNCTUATION = 2
+
+class Console:
+    """input and output controls"""
+
+    def clear_screen(self):
+        """clear and reset the terminal screen"""
+        print("\033c" # reset terminal
+              "\033[3J" # clear scroll-back history
+              "\033[2J" # clear current screen
+              "\033[0m" # default styling
+              "\033[H", # set cursor to the top-left corner
+              end='') # do not print newline
 
 
-def clear_screen():
-    """clear and reset the terminal screen"""
-    print("\033c" # reset terminal
-          "\033[3J" # clear scroll-back history
-          "\033[2J" # clear current screen
-          "\033[0m" # default styling
-          "\033[H", # set cursor to the top-left corner
-          end='') # do not print newline
+    def erase_char(self, n: int = 1):
+        """clear the last n typed characters from the screen"""
+        print(PState.DEFAULT + '\b' * n + ' ' * n + '\b' * n, end='')
 
 
-def erase_char(n: int = 1):
-    """clear the last n typed characters from the screen"""
-    print(PState.DFLT + '\b' * n + ' ' * n + '\b' * n, end='')
-
-
-def main_menu():
-    """display welcome and menu"""
-    clear_screen()
-    print("TypingStats")
-    # print list of test files
-    root = "./tests/"
-    test_files = glob.glob("test*.txt", root_dir=root)
-    test_files.sort()
-    i = 0
-    for i, test_file in enumerate(test_files):
-        try:
-            with open(root + test_file, "rt",
-                      encoding=loc.getpreferredencoding()) as tf:
-                print(str(i) + ". " + tf.readline().strip()[:50] + "...")
-        except IOError:
-            print(str(i) + ". " + test_file + " (caution: may not work)")
-    response = input("Select a test # to run or enter 'Q' to quit: ").strip()
-    while True:
-        if response.isdigit():
-            if 0 <= int(response) < len(test_files):
-                return root + test_files[int(response)]
-        elif response.upper() == 'Q':
-            return 'Q'
-        print("Invalid response.")
+    def main_menu(self):
+        """display welcome and menu"""
+        self.clear_screen()
+        print("TypingStats")
+        # print list of test files
+        root = "./tests/"
+        test_files = glob.glob("test*.txt", root_dir=root)
+        test_files.sort()
+        i = 0
+        for i, test_file in enumerate(test_files):
+            try:
+                with open(root + test_file, "rt",
+                          encoding=loc.getpreferredencoding()) as tf:
+                    print(str(i) + ". " + tf.readline().strip()[:50] + "...")
+            except IOError:
+                print(str(i) + ". " + test_file + " (caution: may not work)")
         response = input("Select a test # to run or enter 'Q' to quit: ").strip()
+        while True:
+            if response.isdigit():
+                if 0 <= int(response) < len(test_files):
+                    return root + test_files[int(response)]
+            elif response.upper() == 'Q':
+                return 'Q'
+            print("Invalid response.")
+            response = input("Select a test # to run or enter 'Q' to quit: ").strip()
 
 
-def setup_parser():
-    """configure help and command-line parameters"""
-    parser = ap.ArgumentParser(prog="TypingStats",
-                               description="""Check your typing skills
-                                   against any text of your choice!""",
-                               epilog="Developed by Jed Schaaf (2025)")
-    parser.add_argument("--input", "-if",
-                        help="Source file of text to use for typing test",
-                        type=str)
-    parser.add_argument("--output", "-of",
-                        help="Statistics file to append typing results",
-                        type=str, default="./results.txt")
-    return parser
+    def setup_parser(self):
+        """configure help and command-line parameters"""
+        parser = ap.ArgumentParser(prog="TypingStats",
+                                   description="""Check your typing skills
+                                       against any text of your choice!""",
+                                   epilog="Developed by Jed Schaaf (2025)")
+        parser.add_argument("--input", "-if",
+                            help="Source file of text to use for typing test",
+                            type=str)
+        parser.add_argument("--output", "-of",
+                            help="Statistics file to append typing results",
+                            type=str, default="./results.txt")
+        return parser
 
 
-def readkbd():
-    """read the next character or control character from the keyboard"""
-    retval = rc.readchar()
-    control = False
-    if retval in ('\000', '\xe0'):
-        control = True
+    def read_kbd(self):
+        """read the next character or control character from the keyboard"""
         retval = rc.readchar()
-    return retval, control
+        control = False
+        if retval in ('\000', '\xe0'):
+            control = True
+            retval = rc.readchar()
+        return retval, control
 
 
 class Main:
@@ -109,6 +111,9 @@ class Main:
     correct_chars:list
     user_text:list
     content_state:CState
+    parser:ap.ArgumentParser
+    args:ap.Namespace
+    console:Console
 
     def __init__(self):
         """TypingStats default setup"""
@@ -117,6 +122,9 @@ class Main:
             self.word_backspace = '\x7f'
         else:
             self.word_backspace = '\x08'
+        self.console = Console()
+        self.parser = self.console.setup_parser()
+
 
     def reset_stats(self):
         """Reset statistic counters"""
@@ -127,10 +135,9 @@ class Main:
     def main(self):
         """TypingStats main program"""
 
-        parser = setup_parser()
-        args = parser.parse_args()
+        self.args = self.parser.parse_args()
 
-        in_file = args.input if args.input else main_menu()
+        in_file = self.args.input if self.args.input else self.console.main_menu()
         while in_file != 'Q':
 
             # set up statistics counters
@@ -144,19 +151,19 @@ class Main:
             except IOError as err:
                 print("Could not find, open, or read test file")
                 print(err)
-                parser.print_help()
+                self.parser.print_help()
                 return 1
 
             first = True
             abort = False
-            clear_screen()
-            print("\nBegin typing when ready\n")
+            self.console.clear_screen()
+            print("Begin typing whenever you are ready:")
             start = 0 #
             for line in self.file_data:
                 self.content_state = CState.INITIAL
                 print(line)
                 self.user_text = []
-                next_ch, ctrl = readkbd() # wait for next keyboard input
+                next_ch, ctrl = self.console.read_kbd() # wait for next keyboard input
                 self.stat_counters["typed_keys"] += 1
 
                 # start nanosecond timer once user begins typing
@@ -168,14 +175,7 @@ class Main:
 
                     # backtrack state for one character
                     if next_ch == rc.key.BACKSPACE:
-                        if self.user_text:
-                            next_ch = self.remove_last_char()
-                        else:
-                            next_ch = ''
-                        if next_ch != '':
-                            self.remove_char(next_ch)
-                        if not self.user_text:
-                            content_state = CState.INITIAL
+                        self.remove_char(next_ch)
 
                     # backtrack state for contiguous similar characters
                     elif next_ch == self.word_backspace:
@@ -195,8 +195,9 @@ class Main:
                                 self.stat_counters["words"] += 1
                             self.content_state = CState.ALPHANUM
                         elif str.isspace(next_ch):
-                            if self.content_state != CState.BLANKPUNCT: # new blank or punctuation
-                                self.content_state = CState.BLANKPUNCT
+                            # new blank or punctuation
+                            if self.content_state != CState.BLANK_OR_PUNCTUATION:
+                                self.content_state = CState.BLANK_OR_PUNCTUATION
 
                         # update character counts
                         self.stat_counters["all_chars"] += 1
@@ -223,11 +224,11 @@ class Main:
                     else:
                         pass
 
-                    next_ch, ctrl = readkbd()
+                    next_ch, ctrl = self.console.read_kbd()
                     self.stat_counters["typed_keys"] += 1
 
                 if abort:
-                    print(PState.DFLT)
+                    print(PState.DEFAULT)
                     break
 
                 # show missed characters
@@ -236,7 +237,7 @@ class Main:
                         print(PState.WARN+line[m], end='')
                         self.stat_counters["all_chars"] += 1
 
-                print(PState.DFLT)
+                print(PState.DEFAULT)
             duration = tmr.perf_counter_ns() - start # end nanosecond timer
 
             good_chars_count = sum(self.correct_chars)
@@ -246,13 +247,14 @@ class Main:
             self.display_results(duration, good_chars_count, results)
 
             # save results for historical comparison
-            self.save_results(args.output, in_file, duration, good_chars_count)
+            self.save_results(in_file, duration, good_chars_count)
 
             print("Press any key to continue...")
-            readkbd()
-            in_file = main_menu()
+            self.console.read_kbd()
+            in_file = self.console.main_menu()
 
-        print("\nHope you enjoyed testing your typing skills!")
+        print("Your results are saved in <" + self.args.output + ">.\n" +
+              "Hope you enjoyed testing your typing skills!")
         return 0 # end of main()
 
 
@@ -272,11 +274,12 @@ class Main:
         """remove a character from current typing line"""
         if self.content_state == CState.INITIAL:
             return
-        erase_char()
+        self.console.erase_char()
+        next_char = self.remove_last_char()
         if self.content_state == CState.ALPHANUM and not str.isalnum(next_char):
-            self.content_state = CState.BLANKPUNCT
+            self.content_state = CState.BLANK_OR_PUNCTUATION
             self.stat_counters["words"] -= 1
-        elif self.content_state == CState.BLANKPUNCT and str.isalnum(next_char):
+        elif self.content_state == CState.BLANK_OR_PUNCTUATION and str.isalnum(next_char):
             self.content_state = CState.ALPHANUM
 
 
@@ -288,15 +291,15 @@ class Main:
         while self.user_text:
             next_char = self.user_text[-1]
             if self.content_state == CState.ALPHANUM and not str.isalnum(next_char):
-                self.content_state = CState.BLANKPUNCT
+                self.content_state = CState.BLANK_OR_PUNCTUATION
                 self.stat_counters["words"] -= 1
                 break
-            if self.content_state == CState.BLANKPUNCT and str.isalnum(next_char):
+            if self.content_state == CState.BLANK_OR_PUNCTUATION and str.isalnum(next_char):
                 self.content_state = CState.ALPHANUM
                 break
             self.remove_last_char()
             char_set_counter += 1
-        erase_char(char_set_counter)
+        self.console.erase_char(char_set_counter)
         if not self.user_text:
             self.content_state = CState.INITIAL
 
@@ -322,11 +325,11 @@ class Main:
         print(f'words per minute: {results[2]:.2f}')
 
 
-    def save_results(self, out_file, in_file, duration, good_chars_count):
+    def save_results(self, in_file, duration, good_chars_count):
         """add results to selected file"""
         try:
             local_encoding = loc.getpreferredencoding()
-            with open(out_file, 'at', encoding=local_encoding) as fo:
+            with open(self.args.output, 'at', encoding=local_encoding) as fo:
                 newline = rc.key.ENTER
                 fo.write(str(dt.now())+newline)
                 fo.write(in_file+newline)
